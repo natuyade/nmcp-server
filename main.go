@@ -10,6 +10,12 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+var waitTimes = map[string]int {
+    "fast": 1,
+    "normal": 3,
+    "slow": 5,
+}
+
 func helloHandler(
 	ctx context.Context,
 	request mcp.CallToolRequest,
@@ -35,18 +41,36 @@ func waitHandler(
 	ctx context.Context,
 	request mcp.CallToolRequest,
 ) (*mcp.CallToolResult, error) {
-	seconds, err := request.RequireInt("seconds")
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
 
-    if seconds < 1 {
-        return mcp.NewToolResultError("入力値は1以上でなければいけません"), nil
+    mode, err := request.RequireString("mode")
+    if err != nil {
+        return mcp.NewToolResultError(err.Error()), nil
     }
 
-	timer := time.NewTimer(time.Duration(seconds) * time.Second)
-	//  deferはこの関数が終了するときに実行される
-	defer timer.Stop()
+    /*
+    var seconds int
+
+    switch mode {
+    case "fast":
+        seconds = 1
+    case "normal":
+        seconds = 3
+    case "slow":
+        seconds = 5
+    default:
+        message := fmt.Sprintf("Invalid mode: %s", mode)
+        return mcp.NewToolResultError(message), nil
+    }
+    */
+
+    seconds, ok := waitTimes[mode]
+    if !ok {
+        message := fmt.Sprintf("Invalid mode: %s", mode)
+        return mcp.NewToolResultError(message), nil
+    }
+
+    timer := time.NewTimer(time.Duration(seconds) * time.Second)
+    defer timer.Stop()
 
     // <- はchannelから値 通知を受信する
     // selectは受信可能になったcaseの処理を実行する
@@ -90,13 +114,13 @@ func main() {
 
 	waitTool := mcp.NewTool(
 		"wait",
-		mcp.WithDescription("指定された秒数後doneを返します"),
-		mcp.WithInteger(
-			"seconds",
-			mcp.Required(),
-            mcp.Min(1),
-			mcp.Description("待機時間"),
-		),
+		mcp.WithDescription("Modeに応じた時間経過後、doneを返します"),
+        mcp.WithString(
+            "mode",
+            mcp.Required(),
+            mcp.Description("待機モード"),
+            mcp.Enum("fast", "normal", "slow"),
+        ),
 	)
 
 	// ツールとハンドラーをサーバーに登録
